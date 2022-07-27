@@ -46,7 +46,6 @@ void GripForceTest::Init(int argc, char* argv[]){
 }
 //This function loads the spr file and inits the scene
 void GripForceTest::BuildScene(){
-	
 	int i = 0;
 	UTRef<ImportIf> import = GetSdk()->GetFISdk()->CreateImport();	/// インポートポイントの作成
 	GetSdk()->LoadScene(fileName, import);	/// ファイルのロード
@@ -58,8 +57,8 @@ void GripForceTest::BuildScene(){
 	fwscene = GetSdk()->GetScene(i);
 	//fwscene->EnableRenderAxis();
 
-	grip.Build(fwscene);
-
+	fingers[0].Build(fwscene);
+	fingers[1].Build(fwscene);
 
 	GetSdk()->GetScene(i)->EnableRenderHaptic();
 	hapscene = phscene->GetHapticEngine();
@@ -144,25 +143,12 @@ void GripForceTest::InitHapticInterface() {
 		hiSdk->Print(DSTR);
 		hiSdk->Print(std::cout);
 
-		spidar = hiSdk->CreateHumanInterface(HISpidarGIf::GetIfInfoStatic())->Cast();
-		if (bFoundCy) {
-			spidar->Init(&HISpidarGDesc("SpidarG6X3R")); //Original SPIDARG6
-			std::cout << "Init SpidarG6X3R" << std::endl;
-		}
-		else {
-			spidar->Init(&HISpidarGDesc("SpidarG6X4R"));	//	low price X SPIDAR
-			std::cout << "Init SpidarG6X4R" << std::endl;
-			DSTR << "Init SpidarG6X4R" << std::endl;
-		}
-		spidar->Calibration();
-		spidar = spidar->Cast();
-	}
-	else if (humanInterface == XBOX) {
-		spidar = hiSdk->CreateHumanInterface(HIXbox360ControllerIf::GetIfInfoStatic())->Cast();
-	}
-	else if (humanInterface == FALCON) {
-		spidar = hiSdk->CreateHumanInterface(HINovintFalconIf::GetIfInfoStatic())->Cast();
-		spidar->Init(NULL);
+		spidars[0] = hiSdk->CreateHumanInterface(HISpidar4If::GetIfInfoStatic())->Cast();
+		spidars[1] = hiSdk->CreateHumanInterface(HISpidar4If::GetIfInfoStatic())->Cast();
+		spidars[0]->Init(&HISpidar4Desc());
+		spidars[1]->Init(&HISpidar4Desc());
+		spidars[0]->Calibration();
+		spidars[1]->Calibration();
 	}
 }
 
@@ -179,7 +165,8 @@ void GripForceTest::InitCameraView(){
 
 //Calibrates the position of the grip and both pointers
 void GripForceTest::calibrate() {	
-	spidar->Calibration();
+	spidars[0]->Calibration();
+	spidars[1]->Calibration();
 }
 
 //This multimedia thread handles the haptic (6DOF virtual coupling pointers) and physics simulation (Springhead)
@@ -205,31 +192,18 @@ void GripForceTest::TimerFunc(int id){
 
 		phscene->Step();  //springhead physics step
 		
-		Posed pose = spidar->GetPose();
-		pose.Pos() = pose.Pos()*4;
-		pose.PosY() += 0.05;
-		grip.Step(pose, phscene->GetTimeStep());	//	this will be actual code.
+		Posed poses[2];
+		poses[0] = spidars[0]->GetPose();
+		poses[1] = spidars[1]->GetPose();
 
-		Vec3d totalForce, totalTorque;
-		for (Finger& finger : grip.fingers) {
-			if(finger.GetIndex() < 0) finger.AddForce(-1);	//	This must be actual force sensor values. For debug purpose only first two pointers get force.
+		for (Finger& finger : fingers) {
+			const int i = finger.GetIndex();
 			Vec6d couplingForce = finger.spring->GetMotorForce();
-			//DSTR << "c" << finger.GetIndex() << " f=" << couplingForce << std::endl;
-			//	finger.AddForce(couplingForce[0]);
-			Posed socketPose;
-			finger.spring->GetSocketPose(socketPose);
-			Quaterniond ori = grip.gripDevice->GetOrientation() * socketPose.Ori();
-			//	all in global coordinates:
-			Vec3d p = grip.gripDevice->GetOrientation() * (finger.position + finger.length * finger.direction);
-			Vec3d f = ori * couplingForce.sub_vector(0, Vec3d());
-			Vec3d t = ori * couplingForce.sub_vector(3, Vec3d());
-			totalForce += f;
-			//totalTorque += t + (p % f);
-			totalTorque += (p % f);
+			Vec3d f = couplingForce.sub_vector(0, Vec3d());
+			double fs = 0.3, ts = 1;
+			spidars[i]->SetForce(-fs * f, Vec3d());
+			spidars[i]->Update(pdt);  //updates the forces displayed in SPIDAR
 		}
-		double fs = 0.3, ts = 1;
-		spidar->SetForce(-fs*totalForce, -ts*totalTorque);
-		spidar->Update(pdt);  //updates the forces displayed in SPIDAR
 				
 		PostRedisplay();
 	}

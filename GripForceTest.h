@@ -36,8 +36,8 @@ public: //Local Properties
 		FALCON,
 	} humanInterface;
 
-	FingerGrip grip;
-	HISpidarGIf* spidar;
+	Finger fingers[2];
+	HISpidar4If* spidars[2];
 	PHSceneIf* phscene;
 	FWSceneIf* fwscene;
 	PHHapticEngineIf* hapscene;
