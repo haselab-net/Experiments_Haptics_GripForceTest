@@ -13,6 +13,10 @@
 GripForceTest::GripForceTest(){
 
 	humanInterface = SPIDAR;
+	fingers[0].index = 0;
+	fingers[1].index = 1;
+	spidars[0] = NULL;
+	spidars[1] = NULL;
 	fileName = "./sprfiles/scene.spr";
 	pdt = 0.001f;
 	posScale = 10.0;  //2.5 orignal value with 20x30 floor scene (Virgilio original) (for peta pointer)  10.0 
@@ -145,10 +149,29 @@ void GripForceTest::InitHapticInterface() {
 
 		spidars[0] = hiSdk->CreateHumanInterface(HISpidar4If::GetIfInfoStatic())->Cast();
 		spidars[1] = hiSdk->CreateHumanInterface(HISpidar4If::GetIfInfoStatic())->Cast();
-		spidars[0]->Init(&HISpidar4Desc());
-		spidars[1]->Init(&HISpidar4Desc());
-		spidars[0]->Calibration();
-		spidars[1]->Calibration();
+
+		//	モータの取り付け位置. モータが直方体に取り付けられている場合は，
+		const float PX = 0.12f / 2;		//	x方向の辺の長さ/2
+		const float PY = 0.14f / 2;		//	y方向の辺の長さ/2
+		const float PZ = 0.12f / 2;		//	z方向の辺の長さ/2
+
+		Vec3f motorPos[2][4] = {
+			{ Vec3f(-PX, -PY, PZ), Vec3f(PX, -PY, -PZ), Vec3f(PX, PY, PZ), Vec3f(-PX, PY, -PZ) },
+			{ Vec3f( PX, -PY, PZ), Vec3f(-PX, -PY, -PZ), Vec3f(-PX, PY, PZ), Vec3f(PX, PY, -PZ) },
+		};
+		Vec3f knotPos[4] = { Vec3f(), Vec3f(), Vec3f(), Vec3f() };
+		HISpidar4Desc desc0;
+		desc0.Init(4, motorPos[0], knotPos, 0.365296803653f, 1.66555e-5f, 0.3, 10);
+		if (spidars[0]->Init(&desc0)) {
+			spidars[0]->Calibration();
+		}
+		HISpidar4Desc desc1;
+		desc1.Init(4, motorPos[1], knotPos, 0.365296803653f, 1.66555e-5f, 0.3, 10);
+		if (spidars[1]->Init(&desc1)) {
+			spidars[1]->Calibration();
+		}
+		hiSdk->Print(DSTR);
+		hiSdk->Print(std::cout);
 	}
 }
 
@@ -192,12 +215,14 @@ void GripForceTest::TimerFunc(int id){
 
 		phscene->Step();  //springhead physics step
 		
-		Posed poses[2];
-		poses[0] = spidars[0]->GetPose();
-		poses[1] = spidars[1]->GetPose();
+		Vec3d pos[2];
+		pos[0] = spidars[0]->GetPosition();
+		pos[1] = spidars[1]->GetPosition();
+		DSTR << pos[0] << std::endl;
 
 		for (Finger& finger : fingers) {
 			const int i = finger.GetIndex();
+			finger.device->SetCenterPosition(pos[i]);
 			Vec6d couplingForce = finger.spring->GetMotorForce();
 			Vec3d f = couplingForce.sub_vector(0, Vec3d());
 			double fs = 0.3, ts = 1;
