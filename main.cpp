@@ -6,12 +6,12 @@
  *  This license itself, Boost Software License, The MIT License, The BSD License.   
  */
 
-#include "MultiFinger.h"
+#include "GripForceTest.h"
 #include <conio.h>
 
 
 #pragma hdrstop		// プリコンパイル済ヘッダを利用する場合に必要
-MultiFinger app;
+GripForceTest app;
 
 int __cdecl main(int argc, char *argv[]){
 
