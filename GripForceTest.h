@@ -36,7 +36,8 @@ public: //Local Properties
 		FALCON,
 	} humanInterface;
 
-	Finger fingers[2];
+	#define  NFINGERS	2
+	Finger fingers[NFINGERS];
 	HISpidar4If* spidars[2];
 	PHSceneIf* phscene;
 	FWSceneIf* fwscene;
@@ -97,6 +98,7 @@ public: //Local Properties
 
 	void resetObjects();  //resets the objects position
 	bool displayGraphFlag;  //flag to display the force sensor graph
+	bool bOutputForce = false;
 
 	//BINOD objects
 	DRUARTMotorDriverIf* uartMotorDriver;

@@ -13,8 +13,6 @@
 GripForceTest::GripForceTest(){
 
 	humanInterface = SPIDAR;
-	fingers[0].index = 0;
-	fingers[1].index = 1;
 	spidars[0] = NULL;
 	spidars[1] = NULL;
 	fileName = "./sprfiles/scene.spr";
@@ -61,8 +59,8 @@ void GripForceTest::BuildScene(){
 	fwscene = GetSdk()->GetScene(i);
 	//fwscene->EnableRenderAxis();
 
-	fingers[0].Build(fwscene);
-	fingers[1].Build(fwscene);
+	fingers[0].Build(0, fwscene);
+	fingers[1].Build(1, fwscene);
 
 	GetSdk()->GetScene(i)->EnableRenderHaptic();
 	hapscene = phscene->GetHapticEngine();
@@ -157,16 +155,20 @@ void GripForceTest::InitHapticInterface() {
 
 		Vec3f motorPos[2][4] = {
 			{ Vec3f(-PX, -PY, PZ), Vec3f(PX, -PY, -PZ), Vec3f(PX, PY, PZ), Vec3f(-PX, PY, -PZ) },
-			{ Vec3f( PX, -PY, PZ), Vec3f(-PX, -PY, -PZ), Vec3f(-PX, PY, PZ), Vec3f(PX, PY, -PZ) },
+			{ Vec3f(PX, -PY, PZ), Vec3f(-PX, -PY, -PZ), Vec3f(-PX, PY, PZ), Vec3f(PX, PY, -PZ) },
 		};
 		Vec3f knotPos[4] = { Vec3f(), Vec3f(), Vec3f(), Vec3f() };
 		HISpidar4Desc desc0;
-		desc0.Init(4, motorPos[0], knotPos, 0.365296803653f, 1.66555e-5f, 0.3, 10);
+		desc0.Init(4, motorPos[0], knotPos, 0.365296803653f, 1.66555e-5f, 0.1, 10.0);
+		desc0.motors[1].lengthPerPulse *= -1;
+		desc0.motors[2].lengthPerPulse *= -1;
 		if (spidars[0]->Init(&desc0)) {
 			spidars[0]->Calibration();
 		}
 		HISpidar4Desc desc1;
-		desc1.Init(4, motorPos[1], knotPos, 0.365296803653f, 1.66555e-5f, 0.3, 10);
+		desc1.Init(4, motorPos[1], knotPos, 0.365296803653f, 1.66555e-5f, 0.1, 10.0);
+		desc1.motors[1].lengthPerPulse *= -1;
+		desc1.motors[2].lengthPerPulse *= -1;
 		if (spidars[1]->Init(&desc1)) {
 			spidars[1]->Calibration();
 		}
@@ -215,19 +217,31 @@ void GripForceTest::TimerFunc(int id){
 
 		phscene->Step();  //springhead physics step
 		
-		Vec3d pos[2];
-		pos[0] = spidars[0]->GetPosition();
-		pos[1] = spidars[1]->GetPosition();
-		DSTR << pos[0] << std::endl;
+		for (int i = 0; i < NFINGERS; ++i){
+			if (spidars[i]->IsGood()) {
+				Finger& finger = fingers[i];
+				Vec3f pos = spidars[i]->GetPosition();
+				pos.y += 0.005;
+				//if (i == 0) DSTR << "Spidar0Pos = " << pos << std::endl;
+				finger.device->SetCenterPosition(6 * pos);
+				Vec6d couplingForce = finger.spring->GetMotorForce();
+				Vec3d f = couplingForce.sub_vector(0, Vec3d());
+				double fs = 1, ts = 1;
+				Vec3d outForce = -fs * f;
+				//if (i == 0) std::cout << "of:" << outForce << std::endl;
+				if (bOutputForce) {
+					spidars[i]->SetForce(outForce);
+				}
+				else {
+					spidars[i]->SetForce(Vec3d());
+				}
+				spidars[i]->Update(pdt);  //updates the forces displayed in SPIDAR
 
-		for (Finger& finger : fingers) {
-			const int i = finger.GetIndex();
-			finger.device->SetCenterPosition(pos[i]);
-			Vec6d couplingForce = finger.spring->GetMotorForce();
-			Vec3d f = couplingForce.sub_vector(0, Vec3d());
-			double fs = 0.3, ts = 1;
-			spidars[i]->SetForce(-fs * f, Vec3d());
-			spidars[i]->Update(pdt);  //updates the forces displayed in SPIDAR
+/*				for (int m = 0; m < spidars[i]->NMotor(); ++m) {
+					std::cout << spidars[i]->GetMotor(m)->GetLength() << " ";
+				}
+				if (i==1) std::cout << std::endl;	*/
+			}
 		}
 				
 		PostRedisplay();
@@ -265,6 +279,9 @@ void GripForceTest::Keyboard(int key, int x, int y){
 			calibrate();
 		}
 			break;
+		case 'f': {
+			bOutputForce = !bOutputForce;
+		}
 		case 'd': {
 			if (displayGraphFlag) {
 				displayGraphFlag = false;
@@ -361,9 +378,6 @@ void GripForceTest::AtExit(){
 
 // Initialize the position of the objects in the scene
 void GripForceTest::resetObjects(){
-
-	int randAngle;
-	randAngle = rand() % (360 + 1);
 
 	Quaterniond qq;
 	Posed ptmp;
