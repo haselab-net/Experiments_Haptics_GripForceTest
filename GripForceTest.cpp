@@ -61,16 +61,13 @@ void GripForceTest::BuildScene(){
 
 	fingers[0].Build(0, fwscene);
 	fingers[1].Build(1, fwscene);
-
 	GetSdk()->GetScene(i)->EnableRenderHaptic();
-	hapscene = phscene->GetHapticEngine();
-	//hapscene->EnableHapticEngine(true);
+	phscene->SetContactMode(fingers[0].tool, fingers[1].tool, PHSceneDesc::ContactMode::MODE_NONE);
 
-	PHHapticEngineIf* he = phscene->GetHapticEngine();	// 力覚エンジンをとってくる
-	PHHapticEngineDesc hd;
+	//PHHapticEngineIf* he = phscene->GetHapticEngine();	// 力覚エンジンをとってくる
+	//PHHapticEngineDesc hd;
 	//he->EnableHapticEngine(true);						// 力覚エンジンの有効化
 	//he->SetHapticEngineMode(PHHapticEngineDesc::SINGLE_THREAD);
-	maxReach = 0.05;
 	this->nsolids = phscene->NSolids();
 	DSTR << "Nsolids: " << nsolids << std::endl;  //DEBUG
 	PHSolidIf **solidspnt = phscene->GetSolids();
@@ -78,7 +75,7 @@ void GripForceTest::BuildScene(){
 	PHSolidIf *floor = phscene->FindObject("soCube")->Cast();
 	floor->GetShape(0)->SetStaticFriction(0.4f);
 	
-	
+/*
 	//define jenga object properties
 	fJenga1 = phscene->FindObject("soJenga1")->Cast();
 	fJenga1->GetShape(0)->SetDensity(357.142f);  //non specific value try and error
@@ -87,8 +84,10 @@ void GripForceTest::BuildScene(){
 	fJenga1->GetShape(0)->SetDynamicFriction(0.7f);
 	//DSTR << "jenga mass: " << fJenga1->GetMass() << std::endl;  //debug
 	//DSTR << "jenga volume: " << fJenga1->GetShape(0)->CalcVolume() << std::endl;  //debug
+*/
 
 	//defining the cellphone density and mass
+/*
 	fPhone = phscene->FindObject("soPhone")->Cast();
 	fPhone->GetShape(0)->SetDensity(677);  // non specific value try and error
 	fPhone->CompInertia();
@@ -109,7 +108,7 @@ void GripForceTest::BuildScene(){
 	//DSTR << "hammer mass: " << fHammer->GetMass() << std::endl;  //debug
 	//DSTR << "head volume: " << fHammer->GetShape(0)->CalcVolume() << std::endl;  //debug
 	//DSTR << "stick volume: " << fHammer->GetShape(1)->CalcVolume() << std::endl; //debug 
-
+*/
 	//aluminium block  mass and density  64cm^3 * iron density (7.87gr) = 200
 	fAluminio = phscene->FindObject("soAluminio")->Cast();
 	fAluminio->GetShape(0)->SetDensity(1355);  //non specific value try and error
@@ -118,7 +117,6 @@ void GripForceTest::BuildScene(){
 	fAluminio->GetShape(0)->SetDynamicFriction(0.7f);
 	DSTR << "aluminio vol: " << fAluminio->GetShape(0)->CalcVolume() << std::endl;  //debug
 	DSTR << "aluminio mass: " << fAluminio->GetMass() << std::endl;   //debug
-
 }
 
 //Inits SPIDAR and calibrates the pointer position
@@ -159,14 +157,14 @@ void GripForceTest::InitHapticInterface() {
 		};
 		Vec3f knotPos[4] = { Vec3f(), Vec3f(), Vec3f(), Vec3f() };
 		HISpidar4Desc desc0;
-		desc0.Init(4, motorPos[0], knotPos, 0.365296803653f, 1.66555e-5f, 0.1, 10.0);
+		desc0.Init(4, motorPos[0], knotPos, 0.365296803653f, 1.66555e-5f, 0.3, 10.0);
 		desc0.motors[1].lengthPerPulse *= -1;
 		desc0.motors[2].lengthPerPulse *= -1;
 		if (spidars[0]->Init(&desc0)) {
 			spidars[0]->Calibration();
 		}
 		HISpidar4Desc desc1;
-		desc1.Init(4, motorPos[1], knotPos, 0.365296803653f, 1.66555e-5f, 0.1, 10.0);
+		desc1.Init(4, motorPos[1], knotPos, 0.365296803653f, 1.66555e-5f, 0.3, 10.0);
 		desc1.motors[1].lengthPerPulse *= -1;
 		desc1.motors[2].lengthPerPulse *= -1;
 		if (spidars[1]->Init(&desc1)) {
@@ -179,7 +177,7 @@ void GripForceTest::InitHapticInterface() {
 
 void GripForceTest::InitCameraView(){
 
-	Vec3d pos = Vec3d(0, 0.02, 0.2);
+	Vec3d pos = Vec3d(0.04, 0.1, 0.3);
 	GetCurrentWin()->GetTrackball()->SetPosition(pos);
 	Affinef af;
 	af.Pos() = pos;
@@ -218,29 +216,36 @@ void GripForceTest::TimerFunc(int id){
 		phscene->Step();  //springhead physics step
 		
 		for (int i = 0; i < NFINGERS; ++i){
-			if (spidars[i]->IsGood()) {
+			int sidx = NFINGERS - i - 1;
+			if (spidars[sidx]->IsGood()) {
 				Finger& finger = fingers[i];
-				Vec3f pos = spidars[i]->GetPosition();
+				Vec3f pos = spidars[sidx]->GetPosition();
 				pos.y += 0.005;
+				//pos.x += sidx ? 0.001 : -0.001;
 				//if (i == 0) DSTR << "Spidar0Pos = " << pos << std::endl;
-				finger.device->SetCenterPosition(6 * pos);
-				Vec6d couplingForce = finger.spring->GetMotorForce();
-				Vec3d f = couplingForce.sub_vector(0, Vec3d());
-				double fs = 1, ts = 1;
-				Vec3d outForce = -fs * f;
+				finger.device->SetCenterPosition(4 * pos);
+				Vec3d outForce = finger.CalcForce(bOutputVib);
 				//if (i == 0) std::cout << "of:" << outForce << std::endl;
-				if (bOutputForce) {
-					spidars[i]->SetForce(outForce);
+				if (outPutType) {
+					if (outPutType == 1) {
+						spidars[sidx]->SetForce(outForce);
+					}
+					else {
+						spidars[sidx]->SetForce(Vec3d());
+						spidars[sidx]->SetLimitMinForce(outForce.norm());
+					}
 				}
 				else {
-					spidars[i]->SetForce(Vec3d());
+					spidars[sidx]->SetForce(Vec3d());
+					spidars[sidx]->SetLimitMinForce(0.3);
 				}
-				spidars[i]->Update(pdt);  //updates the forces displayed in SPIDAR
+				spidars[sidx]->Update(pdt);  //updates the forces displayed in SPIDAR
 
-/*				for (int m = 0; m < spidars[i]->NMotor(); ++m) {
-					std::cout << spidars[i]->GetMotor(m)->GetLength() << " ";
+/*	
+				for (int m = 0; m < spidars[sidx]->NMotor(); ++m) {
+					std::cout << spidars[sidx]->GetMotor(m)->GetLength() << " ";
 				}
-				if (i==1) std::cout << std::endl;	*/
+				if (i==1) std::cout << std::endl;	//	*/
 			}
 		}
 				
@@ -280,8 +285,16 @@ void GripForceTest::Keyboard(int key, int x, int y){
 		}
 			break;
 		case 'f': {
-			bOutputForce = !bOutputForce;
+			outPutType ++;
+			if (outPutType == 3) {
+				outPutType = 0;
+			}
 		}
+				break;
+		case 'v': {
+			bOutputVib = !bOutputVib;
+		}
+				break;
 		case 'd': {
 			if (displayGraphFlag) {
 				displayGraphFlag = false;
@@ -383,10 +396,12 @@ void GripForceTest::resetObjects(){
 	Posed ptmp;
 
 	//left jenga
-	fJenga1->SetVelocity(Vec3d());
-	qq.FromEuler(Vec3f(Radf(90.0f), Radf(0.0f), 0.0f));
-	ptmp = Posed(Vec3d(-0.121f, 0.021f, 0.1f), qq);
-	fJenga1->SetPose(ptmp);
+	if (fJenga1){
+		fJenga1->SetVelocity(Vec3d());
+		qq.FromEuler(Vec3f(Radf(90.0f), Radf(0.0f), 0.0f));
+		ptmp = Posed(Vec3d(-0.121f, 0.021f, 0.1f), qq);
+		fJenga1->SetPose(ptmp);
+	}
 
 	//middle jenga
 	//fJenga2->SetVelocity(Vec3d());
@@ -401,16 +416,20 @@ void GripForceTest::resetObjects(){
 	//fJenga3->SetPose(ptmp);
 
 	//phone
-	fPhone->SetVelocity(Vec3d());
-	qq.FromEuler(Vec3f(Radf(90.0f), Radf(0.0f), 0.0f));
-	ptmp = Posed(Vec3d(0.0f, 0.045f, 0.1f), qq);
-	fPhone->SetPose(ptmp);
+	if (fPhone) {
+		fPhone->SetVelocity(Vec3d());
+		qq.FromEuler(Vec3f(Radf(90.0f), Radf(0.0f), 0.0f));
+		ptmp = Posed(Vec3d(0.0f, 0.045f, 0.1f), qq);
+		fPhone->SetPose(ptmp);
+	}
 
 	//hammer
-	fHammer->SetVelocity(Vec3d());
-	qq.FromEuler(Vec3f(Radf(0.0f), Radf(180.0f), 0.0f));
-	ptmp = Posed(Vec3d(0.1f, 0.045f, 0.1f), qq);
-	fHammer->SetPose(ptmp);
+	if (fHammer){
+		fHammer->SetVelocity(Vec3d());
+		qq.FromEuler(Vec3f(Radf(0.0f), Radf(180.0f), 0.0f));
+		ptmp = Posed(Vec3d(0.1f, 0.045f, 0.1f), qq);
+		fHammer->SetPose(ptmp);
+	}
 
 	//alumini cube
 	fAluminio->SetVelocity(Vec3d());

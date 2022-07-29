@@ -41,7 +41,6 @@ public: //Local Properties
 	HISpidar4If* spidars[2];
 	PHSceneIf* phscene;
 	FWSceneIf* fwscene;
-	PHHapticEngineIf* hapscene;
 	DVAdIf* flexiforce;
 	GRLightDesc ld;    //lights used to draw letters and the force grap in the screen
 
@@ -98,7 +97,8 @@ public: //Local Properties
 
 	void resetObjects();  //resets the objects position
 	bool displayGraphFlag;  //flag to display the force sensor graph
-	bool bOutputForce = false;
+	int outPutType = 0;
+	bool bOutputVib = false;
 
 	//BINOD objects
 	DRUARTMotorDriverIf* uartMotorDriver;
